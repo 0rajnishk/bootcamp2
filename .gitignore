@@ -1,0 +1,11 @@
+.env/*
+.env/
+
+pychache/
+
+*/node_modules/*
+*/dist/*
+*/build/*
+
+frontend/.env
+frontend/node_modules
