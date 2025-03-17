@@ -41,16 +41,13 @@ export default{
 
             const resp = await response.json()
             alert(JSON.stringify(resp))
-            if (resp.msg == "user created correctly") {
-                alert("user created")
-                this.$router.push({name: 'login'})
+            if (resp.msg == "user created") {
+                alert("user created successfully")
+                this.$router.push('/login')
             } else {
                 alert("user not created")
             }
 
-            console.log(resp)
-            console.log(response)
-            this.$router.push('/login')
         }
     }
 

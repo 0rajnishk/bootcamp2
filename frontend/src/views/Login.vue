@@ -40,9 +40,11 @@ export default{
             
             localStorage.setItem('jwt_token', resp.token)
 
-            console.log(resp)
-            console.log(response)
+            if (resp.role == "admin") {
+                this.$router.push('/admin')
+            } else if(resp.role == "user") {
             this.$router.push('/')
+            }
         }
     }
 
