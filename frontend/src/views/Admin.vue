@@ -65,6 +65,7 @@ export default {
             alert(JSON.stringify(resp))
             this.pending_users = resp
         },
+        
         async reject_user(user_id) {
             const token = localStorage.getItem('jwt_token')
 
@@ -74,6 +75,7 @@ export default {
             });
 
             const resp = await response.json()
+
             if (resp.message == 'User rejected and removed') {
                 alert('user rejected successfully')
                 this.fetch_pending_users()
