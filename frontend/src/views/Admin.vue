@@ -1,7 +1,7 @@
 <template>
 
     <h1>Admin Dashboard</h1>
-
+    <button @click="fetch_users()">fetch users</button>
 
     <h2>pending users</h2>
     <ul>
@@ -14,22 +14,36 @@
             <button @click="approve_user(user.id)"> approve</button>
         </li>
     </ul>
+    <h2>users</h2>
+    <ul>
+        <li v-for="user in users">
+            <p>email: {{ user.email }} </p>
+            <p>username: {{ user.username }} </p>
+            <p>status: {{ user.is_approved }} </p>
+            <p>role: {{ user.role }} </p>
+            <button @click="reject_user(user.id)"> delete user</button>
+        </li>
+    </ul>
 
-    <!-- <button @click="toggle_task()"> add task </button>
+    <button @click="toggle_task()"> add task </button>
 
-    <div v-if="task_form" >
+    <div v-if="task_form">
         <h2>add task form</h2>
-        <label for="task_name"> task name </label>
-        <input id="task_name" v-model="task.task_name" type="text">
-
-        <label for="task_description"> task description </label>
-        <input id="task_description" v-model="task.task_description" type="text">
+        <label for="title"> title </label>
+        <input id="title" v-model="task.title" type="text">
 
         <label for="deadline"> deadline </label>
-        <input id="deadline" v-model="task.deadline" type="text">
-        
+        <input id="deadline" v-model="task.deadline" type="date">
+
+        <!-- <lable for="assignee"> assignee </lable> -->
+        <select id="assignee" v-model="task.user_id">
+            <option v-for="user in users" :value="user.id" >
+                {{ user.username }}
+            </option>
+        </select>
+
         <button @click="add_task()"> add task </button>
-    </div> -->
+    </div>
 
 
 </template>
@@ -41,15 +55,17 @@ export default {
     data() {
         return {
             pending_users: [],
-            // task_form: false,
-            // task: {
-            //     task_name: "",
-            //     task_description: "",
-            //     deadline: ""
-            // }
+            users: [],
+
+            task_form: false,
+
+            task: {
+                title: "",
+                deadline: "",
+                user_id: ""
+            }
         }
     },
-
 
 
     methods: {
@@ -62,10 +78,38 @@ export default {
             });
 
             const resp = await response.json()
-            alert(JSON.stringify(resp))
+            // alert(JSON.stringify(resp))
             this.pending_users = resp
         },
-        
+        async fetch_users() {
+            const token = localStorage.getItem('jwt_token')
+
+            const response = await fetch("http://127.0.0.1:5000/users", {
+                method: "get",
+                headers: { 'Authorization': `Bearer  ${token}` },
+            });
+
+            const resp = await response.json()
+            // alert(JSON.stringify(resp))
+            this.users = resp
+        },
+
+        async add_task() {
+            const token = localStorage.getItem('jwt_token')
+
+            alert(JSON.stringify(this.task))
+
+            const response = await fetch("http://127.0.0.1:5000/tasks", {
+                method: "post",
+                headers: { 'Authorization': `Bearer  ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.task)
+            });
+
+            const resp = await response.json()
+            alert(JSON.stringify(resp))
+            // this.users = resp
+        },
+
         async reject_user(user_id) {
             const token = localStorage.getItem('jwt_token')
 
@@ -77,7 +121,7 @@ export default {
             const resp = await response.json()
 
             if (resp.message == 'User rejected and removed') {
-                alert('user rejected successfully')
+                alert('user rejected/deleted successfully')
                 this.fetch_pending_users()
             } else {
                 alert('user not rejected')
@@ -92,7 +136,7 @@ export default {
             });
 
             const resp = await response.json()
-            alert(resp.message)
+            // alert(resp.message)
 
             this.fetch_pending_users()
         },
@@ -113,13 +157,14 @@ export default {
         //     }
         // },
 
-        // toggle_task() {
-        //     this.task_form = !this.task_form
-        // }
+        toggle_task() {
+            this.task_form = !this.task_form
+        }
     },
 
     mounted() {
         this.fetch_pending_users()
+        this.fetch_users()
     }
 }
 

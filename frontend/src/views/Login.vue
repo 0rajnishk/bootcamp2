@@ -42,7 +42,7 @@ export default{
 
             if (resp.role == "admin") {
                 this.$router.push('/admin')
-            } else if(resp.role == "user") {
+            } else if (resp.role == "employee") {
             this.$router.push('/')
             }
         }

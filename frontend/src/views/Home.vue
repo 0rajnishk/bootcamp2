@@ -16,9 +16,9 @@ export default {
     },
 
     methods:{
-         async hello(){
+         async fetch_tasks(){
             const token = localStorage.getItem('jwt_token')
-            alert(token)
+
             const response = await fetch("http://127.0.0.1:5000/", {
                 method: "get",
                 headers: {'Authorization': `Bearer  ${token}`},
@@ -30,7 +30,7 @@ export default {
     },
 
     mounted(){
-        this.hello()
+        this.fetch_tasks()
     }
 }
 

@@ -7,7 +7,7 @@ from flask_jwt_extended import get_jwt_identity
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_cors import CORS 
+from flask_cors import CORS
 
 
 app = Flask(__name__)
@@ -61,7 +61,7 @@ class Task(db.Model):
             "deadline": self.deadline,
             "assigned_user_id": self.assigned_user_id
         }
-
+    
 
 with app.app_context():
     db.create_all() 
@@ -189,6 +189,17 @@ class UserApprovalResource(Resource):
         db.session.commit()
         return jsonify({"message": "User rejected and removed"})
 
+class UserManagementResource(Resource):
+    @jwt_required()
+    @role_required(["admin", "manager"])
+    def get(self):
+        Users = User.query.all()
+        users = []
+        for user in Users:
+            users.append(user.serialize())
+        return jsonify(users)
+
+
 
 
 
@@ -203,6 +214,154 @@ def create_admin():
             db.session.commit()
             print("Admin user created successfully")
 
+
+
+# ######################################################################################################################################################## #
+# ######################################################################################################################################################## #
+# ######################################################################################################################################################## #
+# ######################################################################################################################################################## #
+# ================================================= User Verification =========================================================
+
+
+# ================================================= Task Management =========================================================
+
+
+
+# Fetch all tasks, create a new task, update, delete tasks
+class TaskResource(Resource):
+    @jwt_required()
+    @role_required(["admin", "manager"])
+    def get(self, task_id=None):
+        if task_id is not None:
+            task = Task.query.get(task_id)
+            tasks = { 'title': task.title,
+            'description': task.description,
+            'status': task.status,
+            'deadline': task.deadline,
+            'assigned_user_id': task.assigned_user_id
+            }
+            return jsonify(task.serialize() if task else {"message": "Task not found"})
+        tasks = Task.query.all()
+        task_to_return = []
+
+        for task in tasks:
+            task_to_return.append(task.serialize())
+
+        return jsonify(task_to_return)
+    
+    @jwt_required()
+    @role_required(["manager", "admin"])
+    def post(self):
+        data = request.get_json()
+        new_task = Task(
+            title=data['title'],
+            assigned_user_id=data.get('user_id'),
+            deadline=datetime.strptime(data['deadline'], '%Y-%m-%d') if data.get('deadline') else None
+        )
+        db.session.add(new_task)
+        db.session.commit()
+        return {"message": "Task created successfully"}
+
+    @jwt_required()
+    @role_required(["manager", "admin"])
+    def put(self, task_id):
+        task = Task.query.get(task_id)
+        if not task:
+            return jsonify({"message": "Task not found"})
+        
+        data = request.get_json()
+        task.title = data.get('title', task.title)
+        task.description = data.get('description', task.description)
+        task.status = data.get('status', task.status)
+        db.session.commit()
+        return jsonify({"message": "Task updated successfully"})
+
+    @jwt_required()
+    @role_required(["admin"])
+    def delete(self, task_id):
+        task = Task.query.get(task_id)
+        if not task:
+            return jsonify({"message": "Task not found"})
+        
+        db.session.delete(task)
+        db.session.commit()
+        return jsonify({"message": "Task deleted successfully"})
+
+
+class UserTaskResource(Resource):
+    @jwt_required()
+    @role_required(["employee"])
+    def get(self):
+
+        username = get_jwt_identity()
+        print("Username", username)
+        print("=====================================", username)
+        user = User.query.filter_by(username=username).first()
+        print(user.id)
+
+
+        tasks = Task.query.filter_by(assigned_user_id=user.id).all()
+
+        tasks_to_return = []
+
+        for task in tasks:
+            tasks_to_return.append(task.serialize())
+
+        return make_response(jsonify(tasks_to_return), 200)
+
+
+
+# ================================================= XXXXXXXXXXXXXXXXXX =========================================================
+
+# ================================================= XXXXXXXXXXXXXXXXXX =========================================================
+
+
+
+# Assign Task to User
+class AssignTaskResource(Resource):
+    @jwt_required()
+    @role_required(["manager"])
+    def put(self, task_id):
+        data = request.get_json()
+        user_id = data.get("user_id")
+        
+        task = Task.query.get(task_id)
+        user = User.query.get(user_id)
+
+        if not task or not user:
+            return jsonify({"message": "Task or User not found"})
+
+        task.assigned_user_id = user.id
+        db.session.commit()
+        return jsonify({"message": "Task assigned successfully"})
+
+
+
+
+
+
+# ================================================= XXXXXXXXXXXXXXXXXX =========================================================
+# Stats API
+class StatsResource(Resource):
+    @jwt_required()
+    @role_required(["admin", "manager"])
+    def get(self):
+        total_users = User.query.count()
+        total_tasks = Task.query.count()
+        completed_tasks = Task.query.filter_by(status="completed").count()
+        
+        return jsonify({
+            "total_users": total_users,
+            "total_tasks": total_tasks,
+            "completed_tasks": completed_tasks
+        })
+
+
+
+
+
+
+
 # ######################################################################################################################################################## #
 # ##############################################################  Routes  ############################################################################### #
 api.add_resource(Hello, '/')
@@ -210,6 +369,12 @@ api.add_resource(SignupResource, '/signup')
 api.add_resource(LoginResource, '/login')
 api.add_resource(UserApprovalResource, '/users/pending', '/users/<int:user_id>/approve', '/users/<int:user_id>/reject')
 
+
+api.add_resource(TaskResource, '/tasks', '/task/<int:task_id>')
+api.add_resource(StatsResource, '/stats')
+api.add_resource(AssignTaskResource, '/task/<int:task_id>/assign')
+api.add_resource(UserManagementResource, '/users')
+api.add_resource(UserTaskResource, '/my-tasks')
 
 # ######################################################################################################################################################## #
 # ##############################################################  Run  ################################################################################### #
