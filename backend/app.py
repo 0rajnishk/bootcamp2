@@ -8,6 +8,13 @@ from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_cors import CORS
+from flask_mail import Mail, Message
+from celery.schedules import crontab
+import os
+from celery import Celery
+import redis
+from dotenv import load_dotenv
+from celery.schedules import crontab
 
 
 app = Flask(__name__)
@@ -21,6 +28,80 @@ jwt = JWTManager(app)
 db = SQLAlchemy(app)
 
 CORS(app)
+
+
+
+
+# ==========================
+# Flask-Mail Configuration
+# ==========================
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = '0rajnishk@gmail.com'
+app.config['MAIL_PASSWORD'] = 'mjqt keqs rbjg oeni'
+app.config['MAIL_DEFAULT_SENDER'] = '0rajnishk@gmaail.com'
+
+mail = Mail(app)
+
+
+
+
+# ==========================
+# Celery Configuration (Updated)
+# ==========================
+app.config['broker_url'] = os.getenv('BROKER_URL', 'redis://localhost:6379/0')
+app.config['result_backend'] = os.getenv('RESULT_BACKEND', 'redis://localhost:6379/0')
+
+celery = Celery(app.name, broker=app.config['broker_url'], backend=app.config['result_backend'])
+celery.conf.broker_connection_retry_on_startup = True  # Fix Celery 6.0 deprecation warning
+
+# ==========================
+# Redis Cache Setup
+# ==========================
+cache = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+
+# ==========================
+# Celery Initialization
+# ==========================
+def init_celery(flask_app):
+    celery_app = Celery(
+        flask_app.import_name,
+        broker=flask_app.config['broker_url'],
+        backend=flask_app.config['result_backend']
+    )
+    celery_app.conf.update(flask_app.config)
+    celery_app.conf.broker_connection_retry_on_startup = True  # Ensure retry on startup
+
+    class ContextTask(celery_app.Task):
+        def __call__(self, *args, **kwargs):
+            with flask_app.app_context():
+                return super().__call__(*args, **kwargs)
+
+    celery_app.Task = ContextTask
+    return celery_app
+
+celery = init_celery(app)
+
+
+
+# ==========================
+# Celery Beat Configuration
+# ==========================
+celery.conf.timezone = 'Asia/Kolkata'
+celery.conf.beat_schedule = {
+    'send_reminders': {
+        'task': 'tasks.send_reminders',
+        'schedule': crontab(minute='*/1'),  # Runs every minute
+        'args': ()
+    },
+    'monthly_report': {
+        'task': 'tasks.monthly_report',
+        'schedule': crontab(minute=0, hour=10, day_of_month=1),  # Runs at midnight on the 1st of every month
+        'args': ()
+    },
+}
+
 
 
 
@@ -163,6 +244,8 @@ class Hello(Resource):
 class UserApprovalResource(Resource):
     @jwt_required()
     @role_required(["admin"])
+    # @cache.cached(timeout=60)
+
     def get(self):
         users = User.query.filter_by(is_approved=False).all()
         return jsonify([user.serialize() for user in users])
@@ -176,6 +259,8 @@ class UserApprovalResource(Resource):
         
         user.is_approved = True
         db.session.commit()
+        # cache.clear()
+
         return jsonify({"message": "User approved successfully"})
 
     @jwt_required()
@@ -336,10 +421,6 @@ class AssignTaskResource(Resource):
         return jsonify({"message": "Task assigned successfully"})
 
 
-
-
-
-
 # ================================================= XXXXXXXXXXXXXXXXXX =========================================================
 # Stats API
 class StatsResource(Resource):
@@ -357,6 +438,24 @@ class StatsResource(Resource):
         })
 
 
+
+# ######################################################################################################################################################## #
+# ######################################################################################################################################################## #
+
+
+@celery.task(name="tasks.send_reminders")
+def send_reminders():
+    email = ["jeevanbidgar@gmail.com", "gumapathee@gmail.com", "contact.rajnishk@gmail.com"]
+    for mail in email:
+        msg = Message(
+            subject="Test Email from Flask",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
+            recipients=[mail],
+            body="This is a test email sent via Flask and SMTP."
+        )
+        mail.send(msg)
+    print("Reminder sent at 7:00 AM IST!")
+    return "Reminder sent successfully!"
 
 
 
@@ -378,6 +477,16 @@ api.add_resource(UserTaskResource, '/my-tasks')
 
 # ######################################################################################################################################################## #
 # ##############################################################  Run  ################################################################################### #
+
+# Register API routes
+api.add_resource(SendEmail, '/send-email')
+api.add_resource(CacheDemo, '/cache')
+api.add_resource(DeleteCache, '/delete-cache')
+api.add_resource(QueuedTask, '/queued-task')
+
+
+
+
 
 if __name__ == '__main__':
     create_admin()
